@@ -1,1 +1,9 @@
-<resources><string name="module_description">Allow Storage Isolation package queries on Android 17</string></resources>
+<resources>
+    <string name="app_name">存储隔离可见性修复</string>
+    <string name="module_description">Allow Storage Isolation package queries on Android 17</string>
+    <string name="export_logs">保存诊断日志到 Download</string>
+    <string name="ready">点击按钮导出日志。首次使用请在 KernelSU 中授予本模块 root 权限。</string>
+    <string name="working">正在收集日志…</string>
+    <string name="export_success">已保存：%1$s</string>
+    <string name="export_failed">保存失败：%1$s</string>
+</resources>
