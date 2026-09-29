@@ -1,0 +1,15 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'io.github.storageisolation.visibilityfix'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'io.github.storageisolation.visibilityfix'
+        minSdk 30
+        targetSdk 28
+        versionCode 1
+        versionName '0.1-test'
+    }
+}
+
+dependencies { compileOnly 'de.robv.android.xposed:api:82' }
