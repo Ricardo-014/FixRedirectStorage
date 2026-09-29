@@ -7,9 +7,9 @@ android {
         applicationId 'io.github.storageisolation.visibilityfix'
         minSdk 30
         targetSdk 28
-        versionCode 1
-        versionName '0.1-test'
+        versionCode 2
+        versionName '0.2-api102'
     }
 }
 
-dependencies { compileOnly 'de.robv.android.xposed:api:82' }
+dependencies { compileOnly 'io.github.libxposed:api:102.0.0' }
