@@ -15,10 +15,12 @@ public final class VisibilityHook extends XposedModule {
 
     @Override public void onModuleLoaded(ModuleLoadedParam param) {
         Log.i(TAG, "API 102 module loaded");
+        log(Log.INFO, TAG, "API 102 module loaded");
     }
 
     @Override public void onSystemServerStarting(SystemServerStartingParam param) {
         Log.i(TAG, "system_server starting; installing package visibility hooks");
+        log(Log.INFO, TAG, "system_server starting; installing package visibility hooks");
         int count = 0;
         for (String name : new String[]{
                 "com.android.server.pm.AppsFilterBase",
@@ -40,9 +42,11 @@ public final class VisibilityHook extends XposedModule {
             } catch (ClassNotFoundException ignored) {
             } catch (Throwable e) {
                 Log.e(TAG, "Cannot hook " + name, e);
+                log(Log.ERROR, TAG, "Cannot hook " + name, e);
             }
         }
         Log.i(TAG, "installed " + count + " hooks for UID " + TARGET_UID);
+        log(Log.INFO, TAG, "installed " + count + " hooks for UID " + TARGET_UID);
     }
 
     private static final class VisibilityFilter implements XposedInterface.Hooker {
