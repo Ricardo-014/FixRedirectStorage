@@ -1,6 +1,8 @@
 package io.github.storageisolation.visibilityfix;
 
 import android.util.Log;
+import android.os.Binder;
+import java.io.FileInputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -115,7 +117,10 @@ public final class VisibilityHook extends XposedModule {
     private static final class PackageListHook implements XposedInterface.Hooker {
         private static final AtomicInteger calls = new AtomicInteger();
         @Override public Object intercept(XposedInterface.Chain chain) throws Throwable {
-            if (!Integer.valueOf(TARGET_UID).equals(chain.getArg(2))) return chain.proceed();
+            int callingUid = ((Number) chain.getArg(2)).intValue();
+            boolean app = callingUid == TARGET_UID;
+            boolean service = callingUid == 0 && isStorageIsolationCaller();
+            if (!app && !service) return chain.proceed();
             Object[] args = chain.getArgs().toArray();
             args[2] = Integer.valueOf(1000);
             Object result = chain.proceed(args);
@@ -126,9 +131,28 @@ public final class VisibilityHook extends XposedModule {
                     Object list = result.getClass().getMethod("getList").invoke(result);
                     if (list instanceof java.util.List) size = String.valueOf(((java.util.List<?>) list).size());
                 } catch (Throwable ignored) { }
-                Log.i(TAG, "package list #" + n + " uid=10399 effectiveUid=1000 size=" + size);
+                Log.i(TAG, "package list #" + n + " uid=" + callingUid
+                        + " callerPid=" + Binder.getCallingPid() + " effectiveUid=1000 size=" + size);
+                log(Log.INFO, TAG, "package list #" + n + " uid=" + callingUid
+                        + " callerPid=" + Binder.getCallingPid() + " effectiveUid=1000 size=" + size);
             }
             return result;
+        }
+    }
+
+    private static boolean isStorageIsolationCaller() {
+        int pid = Binder.getCallingPid();
+        if (pid <= 0) return false;
+        try (FileInputStream in = new FileInputStream("/proc/" + pid + "/cmdline")) {
+            byte[] buf = new byte[128];
+            int n = in.read(buf);
+            if (n <= 0) return false;
+            int end = 0;
+            while (end < n && buf[end] != 0) end++;
+            return "storage_isolation".equals(new String(buf, 0, end,
+                    java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
