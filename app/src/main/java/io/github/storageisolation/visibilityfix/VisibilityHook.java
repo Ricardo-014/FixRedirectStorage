@@ -58,14 +58,14 @@ public final class VisibilityHook extends XposedModule {
 
         @Override public Object intercept(XposedInterface.Chain chain) throws Throwable {
             Object uid = chain.getArg(uidIndex);
+            if (Integer.valueOf(TARGET_UID).equals(uid)) {
+                int n = target.getAndIncrement();
+                if (n < 20) Log.i(TAG, "target call #" + n + " bypassed before original filter");
+                return false;
+            }
             Object result = chain.proceed();
             if (observed.getAndIncrement() < 8) {
                 Log.i(TAG, "observed uidArg=" + uid + " result=" + result);
-            }
-            if (Integer.valueOf(TARGET_UID).equals(uid)) {
-                int n = target.getAndIncrement();
-                if (n < 20) Log.i(TAG, "target call #" + n + " result=" + result);
-                if (Boolean.TRUE.equals(result)) return false;
             }
             return result;
         }
