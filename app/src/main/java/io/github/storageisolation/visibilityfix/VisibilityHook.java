@@ -2,6 +2,11 @@ package io.github.storageisolation.visibilityfix;
 
 import android.util.Log;
 import android.os.Binder;
+import android.content.Context;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import java.util.ArrayList;
+import java.util.List;
 import java.io.FileInputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
