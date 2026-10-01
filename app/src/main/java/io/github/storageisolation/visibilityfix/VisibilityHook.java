@@ -36,6 +36,10 @@ public final class VisibilityHook extends XposedModule {
                 final String methodName = method.getName();
                 hook(method).intercept(chain -> {
                     Object result = chain.proceed();
+                    if (result instanceof List && ((List<?>) result).isEmpty()) {
+                        result = recoverServiceRecords(param.getDefaultClassLoader(),
+                                type, (Integer) chain.getArg(0), result);
+                    }
                     String size = result instanceof java.util.List
                             ? String.valueOf(((java.util.List<?>) result).size())
                             : String.valueOf(result);
@@ -49,6 +53,47 @@ public final class VisibilityHook extends XposedModule {
             }
         } catch (Throwable e) {
             log(Log.ERROR, TAG, "Cannot hook Storage Isolation service list", e);
+        }
+    }
+
+    private Object recoverServiceRecords(ClassLoader loader, Class<?> serviceType,
+            int flags, Object original) {
+        try {
+            Object app = Class.forName("android.app.ActivityThread")
+                    .getDeclaredMethod("currentApplication").invoke(null);
+            if (!(app instanceof Context)) return original;
+            PackageManager pm = ((Context) app).getPackageManager();
+            List<PackageInfo> installed = pm.getInstalledPackages(0);
+            Class<?> singleton = Class.forName("moe.shizuku.redirectstorage.g10", false, loader);
+            Method getService = singleton.getDeclaredMethod("嘟嘟噜");
+            getService.setAccessible(true);
+            Object service = getService.invoke(null);
+            Method getOne = serviceType.getDeclaredMethod("没收门",
+                    String.class, int.class, int.class);
+            getOne.setAccessible(true);
+            List<Object> recovered = new ArrayList<>();
+            int failures = 0;
+            for (PackageInfo info : installed) {
+                if (info == null || info.packageName == null) continue;
+                int userId = info.applicationInfo == null ? 0
+                        : info.applicationInfo.uid / 100000;
+                try {
+                    Object record = getOne.invoke(service, info.packageName, userId, flags);
+                    if (record != null) recovered.add(record);
+                } catch (Throwable error) {
+                    if (++failures == 1) log(Log.WARN, TAG, "single package lookup failed", error);
+                    if (failures >= 5) break;
+                }
+            }
+            String report = "fallback installed=" + installed.size()
+                    + " nativeRecords=" + recovered.size() + " failures=" + failures
+                    + " flags=" + flags;
+            log(Log.INFO, TAG, report);
+            Log.i(TAG, report);
+            return recovered.isEmpty() ? original : recovered;
+        } catch (Throwable error) {
+            log(Log.ERROR, TAG, "Cannot recover service records", error);
+            return original;
         }
     }
 
