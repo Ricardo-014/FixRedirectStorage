@@ -35,19 +35,12 @@ public final class VisibilityHook extends XposedModule {
                         || method.getReturnType() != java.util.List.class) continue;
                 final String methodName = method.getName();
                 hook(method).intercept(chain -> {
-                    Object result;
-                    if (Integer.valueOf(-1).equals(chain.getArg(1))) {
-                        Object[] rewritten = chain.getArgs().toArray();
-                        rewritten[1] = Integer.valueOf(0);
-                        result = chain.proceed(rewritten);
-                    } else {
-                        result = chain.proceed();
-                    }
+                    Object result = chain.proceed();
                     String size = result instanceof java.util.List
                             ? String.valueOf(((java.util.List<?>) result).size())
                             : String.valueOf(result);
                     String message = "app service list " + methodName + "("
-                            + chain.getArg(0) + "," + chain.getArg(1) + " -> user 0) size=" + size;
+                            + chain.getArg(0) + "," + chain.getArg(1) + ") size=" + size;
                     Log.i(TAG, message);
                     log(Log.INFO, TAG, message);
                     return result;
