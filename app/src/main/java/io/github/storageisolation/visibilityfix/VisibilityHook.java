@@ -3,6 +3,7 @@ package io.github.storageisolation.visibilityfix;
 import android.util.Log;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.concurrent.atomic.AtomicInteger;
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam;
@@ -10,8 +11,9 @@ import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam;
 
 public final class VisibilityHook extends XposedModule {
     private static final String TAG = "SIVisibilityFix";
-    // Current installation. Recheck if the original app is reinstalled.
     private static final int TARGET_UID = 10399;
+    private static final AtomicInteger observed = new AtomicInteger();
+    private static final AtomicInteger target = new AtomicInteger();
 
     @Override public void onModuleLoaded(ModuleLoadedParam param) {
         Log.i(TAG, "API 102 module loaded");
@@ -35,6 +37,7 @@ public final class VisibilityHook extends XposedModule {
                     Class<?>[] args = method.getParameterTypes();
                     int index = args.length >= 5 && args[1] == int.class ? 1
                             : args.length >= 4 && args[0] == int.class ? 0 : -1;
+                    Log.i(TAG, "candidate " + method.toGenericString() + " uidIndex=" + index);
                     if (index < 0) continue;
                     hook(method).intercept(new VisibilityFilter(index));
                     count++;
@@ -54,9 +57,15 @@ public final class VisibilityHook extends XposedModule {
         VisibilityFilter(int uidIndex) { this.uidIndex = uidIndex; }
 
         @Override public Object intercept(XposedInterface.Chain chain) throws Throwable {
+            Object uid = chain.getArg(uidIndex);
             Object result = chain.proceed();
-            if (Boolean.TRUE.equals(result) && Integer.valueOf(TARGET_UID).equals(chain.getArg(uidIndex))) {
-                return false;
+            if (observed.getAndIncrement() < 8) {
+                Log.i(TAG, "observed uidArg=" + uid + " result=" + result);
+            }
+            if (Integer.valueOf(TARGET_UID).equals(uid)) {
+                int n = target.getAndIncrement();
+                if (n < 20) Log.i(TAG, "target call #" + n + " result=" + result);
+                if (Boolean.TRUE.equals(result)) return false;
             }
             return result;
         }
