@@ -109,10 +109,18 @@ public final class VisibilityHook extends XposedModule {
 
     private static final class PackageListHook implements XposedInterface.Hooker {
         private static final AtomicInteger calls = new AtomicInteger();
+        private static final AtomicInteger rootCalls = new AtomicInteger();
         @Override public Object intercept(XposedInterface.Chain chain) throws Throwable {
             int callingUid = ((Number) chain.getArg(2)).intValue();
             boolean app = callingUid == TARGET_UID;
-            boolean service = callingUid == 0 && isStorageIsolationCaller();
+            long flags = ((Number) chain.getArg(0)).longValue();
+            boolean rootQuery = callingUid == 0
+                    && (flags == 4096L || flags == 12288L);
+            boolean service = rootQuery && isStorageIsolationCaller();
+            if (rootQuery && rootCalls.getAndIncrement() < 50) {
+                Log.i(TAG, "root package query pid=" + Binder.getCallingPid()
+                        + " flags=" + flags + " service=" + service);
+            }
             if (!app && !service) return chain.proceed();
             Object[] args = chain.getArgs().toArray();
             args[2] = Integer.valueOf(1000);
