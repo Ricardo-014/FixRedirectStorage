@@ -126,8 +126,6 @@ public final class VisibilityHook extends XposedModule {
                 } catch (Throwable ignored) { }
                 Log.i(TAG, "package list #" + n + " uid=" + callingUid
                         + " callerPid=" + Binder.getCallingPid() + " effectiveUid=1000 size=" + size);
-                log(Log.INFO, TAG, "package list #" + n + " uid=" + callingUid
-                        + " callerPid=" + Binder.getCallingPid() + " effectiveUid=1000 size=" + size);
             }
             return result;
         }
