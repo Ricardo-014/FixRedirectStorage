@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam;
+import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam;
 import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam;
 
 public final class VisibilityHook extends XposedModule {
@@ -18,6 +19,35 @@ public final class VisibilityHook extends XposedModule {
     @Override public void onModuleLoaded(ModuleLoadedParam param) {
         Log.i(TAG, "API 102 module loaded");
         log(Log.INFO, TAG, "API 102 module loaded");
+    }
+
+
+    @Override public void onPackageLoaded(PackageLoadedParam param) {
+        if (!"moe.shizuku.redirectstorage".equals(param.getPackageName())) return;
+        try {
+            Class<?> type = Class.forName("moe.shizuku.redirectstorage.ef1", false,
+                    param.getDefaultClassLoader());
+            for (Method method : type.getDeclaredMethods()) {
+                Class<?>[] args = method.getParameterTypes();
+                if (args.length != 2 || args[0] != int.class || args[1] != int.class
+                        || method.getReturnType() != java.util.List.class) continue;
+                final String methodName = method.getName();
+                hook(method).intercept(chain -> {
+                    Object result = chain.proceed();
+                    String size = result instanceof java.util.List
+                            ? String.valueOf(((java.util.List<?>) result).size())
+                            : String.valueOf(result);
+                    String message = "app service list " + methodName + "("
+                            + chain.getArg(0) + "," + chain.getArg(1) + ") size=" + size;
+                    Log.i(TAG, message);
+                    log(Log.INFO, TAG, message);
+                    return result;
+                });
+                log(Log.INFO, TAG, "app hook installed: " + method.toGenericString());
+            }
+        } catch (Throwable e) {
+            log(Log.ERROR, TAG, "Cannot hook Storage Isolation service list", e);
+        }
     }
 
     @Override public void onSystemServerStarting(SystemServerStartingParam param) {
