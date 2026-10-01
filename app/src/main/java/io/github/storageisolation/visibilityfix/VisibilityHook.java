@@ -48,8 +48,51 @@ public final class VisibilityHook extends XposedModule {
                 log(Log.ERROR, TAG, "Cannot hook " + name, e);
             }
         }
+        count += hookInstalledPackagesBody(param.getClassLoader());
         Log.i(TAG, "installed " + count + " hooks for UID " + TARGET_UID);
         log(Log.INFO, TAG, "installed " + count + " hooks for UID " + TARGET_UID);
+    }
+
+    private int hookInstalledPackagesBody(ClassLoader loader) {
+        try {
+            Class<?> type = Class.forName("com.android.server.pm.ComputerEngine", false, loader);
+            for (Method method : type.getDeclaredMethods()) {
+                if (!method.getName().equals("getInstalledPackagesBody")
+                        || Modifier.isAbstract(method.getModifiers())) continue;
+                Class<?>[] p = method.getParameterTypes();
+                if (p.length != 3 || p[0] != long.class
+                        || p[1] != int.class || p[2] != int.class) continue;
+                hook(method).intercept(new PackageListHook());
+                Log.i(TAG, "hooked " + method.toGenericString());
+                log(Log.INFO, TAG, "hooked " + method.toGenericString());
+                return 1;
+            }
+            Log.w(TAG, "getInstalledPackagesBody(long,int,int) not found");
+        } catch (Throwable e) {
+            Log.e(TAG, "Cannot hook ComputerEngine.getInstalledPackagesBody", e);
+            log(Log.ERROR, TAG, "Cannot hook ComputerEngine.getInstalledPackagesBody", e);
+        }
+        return 0;
+    }
+
+    private static final class PackageListHook implements XposedInterface.Hooker {
+        private static final AtomicInteger calls = new AtomicInteger();
+        @Override public Object intercept(XposedInterface.Chain chain) throws Throwable {
+            if (!Integer.valueOf(TARGET_UID).equals(chain.getArg(2))) return chain.proceed();
+            Object[] args = chain.getArgs().toArray();
+            args[2] = Integer.valueOf(1000);
+            Object result = chain.proceed(args);
+            int n = calls.getAndIncrement();
+            if (n < 12) {
+                String size = "unknown";
+                try {
+                    Object list = result.getClass().getMethod("getList").invoke(result);
+                    if (list instanceof java.util.List) size = String.valueOf(((java.util.List<?>) list).size());
+                } catch (Throwable ignored) { }
+                Log.i(TAG, "package list #" + n + " uid=10399 effectiveUid=1000 size=" + size);
+            }
+            return result;
+        }
     }
 
     private static final class VisibilityFilter implements XposedInterface.Hooker {
