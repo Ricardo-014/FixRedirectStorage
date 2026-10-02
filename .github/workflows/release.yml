@@ -1,0 +1,64 @@
+name: Publish APK release
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/release.yml]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag
+        required: true
+        default: v0.16
+      run_id:
+        description: Successful Build LSPosed module run containing the APK
+        required: true
+        default: '37026008655'
+      target:
+        description: Source commit or branch for the release tag
+        required: true
+        default: '3b7c6a33a1a3199ce5edf3b3f0785624356c03fd'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag || 'v0.16' }}
+      RELEASE_TARGET: ${{ inputs.target || '3b7c6a33a1a3199ce5edf3b3f0785624356c03fd' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: storage-isolation-visibility-fix-debug
+          run-id: ${{ inputs.run_id || '37026008655' }}
+          github-token: ${{ github.token }}
+          path: dist
+      - name: Publish existing APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/app-debug.apk
+          asset="FixRedirectStorage-${RELEASE_TAG#v}-API102.apk"
+          mv dist/app-debug.apk "dist/$asset"
+          cat > release-notes.md <<'NOTES'
+          Modern LSPosed API 102 module for Storage Isolation on Android 17.
+
+          Version 0.16 restores application visibility needed for per-package application information and resources, while keeping the cleanup of redundant diagnostics and root process probing.
+
+          Keep the original Storage Isolation APK. Enable the module for the Android system / system scope and Storage Isolation, then reboot.
+
+          Tested target application UID: 10399.
+          This asset is the existing APK from a successful build, without rebuilding or resigning.
+          Project code: MIT License (retain the copyright and license notice).
+          NOTES
+          if ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --target "$RELEASE_TARGET" \
+              --title "FixRedirectStorage $RELEASE_TAG (API 102)" \
+              --notes-file release-notes.md
+          fi
+          gh release upload "$RELEASE_TAG" "dist/$asset" --clobber
