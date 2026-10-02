@@ -7,8 +7,8 @@ android {
         applicationId 'io.github.storageisolation.visibilityfix'
         minSdk 30
         targetSdk 28
-        versionCode 14
-        versionName '0.14-api102-record-order'
+        versionCode 15
+        versionName '0.15-api102-minimal'
     }
 }
 
