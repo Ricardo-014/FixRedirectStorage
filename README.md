@@ -1,15 +1,24 @@
-# Storage Isolation package visibility fix — experimental
+# Storage Isolation visibility fix (API 102)
 
-This uses modern libxposed API 102. It leaves the original Storage Isolation APK and its signature untouched. It hooks the Android package visibility filter in `system_server`, changing only decisions whose calling UID is `10399` from filtered to visible.
+Compatibility fix for the original Storage Isolation APK on the tested Android 17 Xiaomi device. Version 0.14 restored the application list on that device; version 0.15 removes earlier experimental hooks and verbose tracing.
 
-## Build
+## Minimal hooks
 
-On GitHub, use **Actions → Build LSPosed module → Run workflow**, then download the `storage-isolation-visibility-fix-debug` artifact. Install the debug APK. In LSPosed, enable the module with scope **System Framework (系统框架 / `system`)**, then reboot. Keep the original Storage Isolation APK installed.
+Only two methods are hooked:
 
-Modern LSPosed treats `android` as Android System's dialog process; `system` is the `system_server` scope. Version 0.4 mistakenly declared `android`. Version 0.5 corrects it. If the manager does not allow System Framework to be checked after updating the APK, disable and re-enable the module, then inspect the scope again.
+1. `ComputerEngine.getInstalledPackagesBody(long, int, int)`: for the Storage Isolation UID only, use UID 1000 for package enumeration.
+2. `ef1.尾巴捏捏(int, int)` in Storage Isolation: keep normal results; if the service returns an empty list, enumerate package names and request each original record through `ef1.没收门(packageName, flags, userId)`.
 
-Before installing, verify the UID with `dumpsys package moe.shizuku.redirectstorage | grep userId=`. If it differs from 10399, edit `TARGET_UID` in `VisibilityHook.java` and rebuild.
+Existing rule records come from the original service. The module does not fabricate rules or write the rule database. AppsFilter hooks, root service process detection, and per-query diagnostic tracing have been removed.
 
-After reboot, tap **Save logs to Download** in the module app. Check for `API 102 module loaded` and a positive hook count. Open Application Rule Management and check that apps appear. If it does not work, disable this module in LSPosed and reboot.
+## Install and build
 
-The GitHub Actions build verifies compilation and packaging. Device behavior has not been verified against the device's Xiaomi framework classes.
+Keep the original Storage Isolation APK. Install the module APK, enable it in LSPosed, and select the Android system / `system` scope plus `moe.shizuku.redirectstorage`. Reboot after updating. This uses modern libxposed API 102.
+
+The tested Storage Isolation UID is **10399**. If reinstalling it changes the UID, update `TARGET_UID` in `VisibilityHook.java` and rebuild. App-side class and method names are tied to the analyzed APK version.
+
+GitHub Actions builds the APK on pushes to main, or through **Actions → Build LSPosed module → Run workflow**. Download the `storage-isolation-visibility-fix-debug` artifact.
+
+The module app retains **Save logs to Download**. It needs root only when exporting logs. Runtime logs contain hook setup and failures.
+
+GitHub Actions validates compilation and packaging. The reduced two-hook version still needs a device check after installation.
