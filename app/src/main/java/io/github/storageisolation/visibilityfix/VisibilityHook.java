@@ -83,7 +83,7 @@ public final class VisibilityHook extends XposedModule {
                 int userId = info.applicationInfo == null ? 0
                         : info.applicationInfo.uid / 100000;
                 try {
-                    Object record = getOne.invoke(service, info.packageName, userId, flags);
+                    Object record = getOne.invoke(service, info.packageName, flags, userId);
                     if (record != null) recovered.add(record);
                 } catch (Throwable error) {
                     if (++failures == 1) log(Log.WARN, TAG, "single package lookup failed", error);
