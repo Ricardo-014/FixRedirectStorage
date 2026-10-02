@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.util.Log;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 import io.github.libxposed.api.XposedModule;
@@ -16,6 +17,7 @@ public final class VisibilityHook extends XposedModule {
     private static final int TARGET_UID = 10399;
 
     @Override public void onSystemServerStarting(SystemServerStartingParam param) {
+        hookApplicationVisibility(param.getClassLoader());
         try {
             Class<?> type = Class.forName("com.android.server.pm.ComputerEngine",
                     false, param.getClassLoader());
@@ -33,6 +35,38 @@ public final class VisibilityHook extends XposedModule {
         } catch (Throwable error) {
             log(Log.ERROR, TAG, "Cannot hook package enumeration", error);
         }
+    }
+
+    private void hookApplicationVisibility(ClassLoader loader) {
+        int count = 0;
+        for (String name : new String[]{
+                "com.android.server.pm.AppsFilterBase",
+                "com.android.server.pm.AppsFilterImpl",
+                "com.android.server.pm.AppsFilterSnapshotImpl"}) {
+            try {
+                Class<?> type = Class.forName(name, false, loader);
+                for (Method method : type.getDeclaredMethods()) {
+                    if (!method.getName().equals("shouldFilterApplication")
+                            || method.getReturnType() != boolean.class
+                            || Modifier.isAbstract(method.getModifiers())) continue;
+                    Class<?>[] args = method.getParameterTypes();
+                    final int uidIndex = args.length >= 5 && args[1] == int.class ? 1
+                            : args.length >= 4 && args[0] == int.class ? 0 : -1;
+                    if (uidIndex < 0) continue;
+                    // Enumeration is not enough: the UI also looks up application
+                    // resources and ApplicationInfo by package name.
+                    hook(method).intercept(chain ->
+                            Integer.valueOf(TARGET_UID).equals(chain.getArg(uidIndex))
+                                    ? false : chain.proceed());
+                    count++;
+                }
+            } catch (ClassNotFoundException ignored) {
+            } catch (Throwable error) {
+                log(Log.ERROR, TAG, "Cannot hook " + name, error);
+            }
+        }
+        log(count == 0 ? Log.WARN : Log.INFO, TAG,
+                "Application visibility hooks installed: " + count);
     }
 
     @Override public void onPackageLoaded(PackageLoadedParam param) {
@@ -88,6 +122,9 @@ public final class VisibilityHook extends XposedModule {
                     if (failures >= 5) break;
                 }
             }
+            log(Log.INFO, TAG, "fallback installed=" + installed.size()
+                    + " nativeRecords=" + recovered.size() + " failures=" + failures
+                    + " flags=" + flags);
             return recovered.isEmpty() ? original : recovered;
         } catch (Throwable error) {
             log(Log.ERROR, TAG, "Cannot recover service records", error);
