@@ -23,3 +23,9 @@ GitHub Actions builds the APK on pushes to main, or through **Actions → Build 
 The module app retains **Save logs to Download**. It needs root only when exporting logs. Runtime logs contain hook setup and failures.
 
 GitHub Actions validates compilation and packaging. Version 0.16 still needs a device check after installation to confirm the application count regression is resolved.
+
+## Downloads and license
+
+Download the APK from [GitHub Releases](https://github.com/xxz3312/FixRedirectStorage/releases).
+
+This project's code is licensed under the [MIT License](LICENSE). You may use, modify, redistribute, and sell it, including in closed-source software, provided the copyright and license notice are retained. This license applies to this module's code; the original Storage Isolation APK and third-party dependencies retain their own licenses.
