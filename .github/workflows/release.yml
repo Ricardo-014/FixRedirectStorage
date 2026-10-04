@@ -9,15 +9,15 @@ on:
       tag:
         description: Release tag
         required: true
-        default: v0.16
+        default: v0.17
       run_id:
         description: Successful Build LSPosed module run containing the APK
         required: true
-        default: '37026008655'
+        default: '37230461609'
       target:
         description: Source commit or branch for the release tag
         required: true
-        default: '3b7c6a33a1a3199ce5edf3b3f0785624356c03fd'
+        default: '9060b2345d71680a794b49bdbf3b7b4660d5c6c9'
 
 permissions:
   contents: write
@@ -29,13 +29,13 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: ${{ inputs.tag || 'v0.16' }}
-      RELEASE_TARGET: ${{ inputs.target || '3b7c6a33a1a3199ce5edf3b3f0785624356c03fd' }}
+      RELEASE_TAG: ${{ inputs.tag || 'v0.17' }}
+      RELEASE_TARGET: ${{ inputs.target || '9060b2345d71680a794b49bdbf3b7b4660d5c6c9' }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: storage-isolation-visibility-fix-debug
-          run-id: ${{ inputs.run_id || '37026008655' }}
+          run-id: ${{ inputs.run_id || '37230461609' }}
           github-token: ${{ github.token }}
           path: dist
       - name: Publish existing APK
@@ -48,11 +48,11 @@ jobs:
           cat > release-notes.md <<'NOTES'
           Modern LSPosed API 102 module for Storage Isolation on Android 17.
 
-          Version 0.16 restores application visibility needed for per-package application information and resources, while keeping the cleanup of redundant diagnostics and root process probing.
+          Version 0.17 resolves the Storage Isolation application UID dynamically from the current system package snapshot. Reinstalling the application no longer requires editing a hardcoded UID. Existing API 102 hooks and original service rule retrieval remain in place.
 
           Keep the original Storage Isolation APK. Enable the module for the Android system / system scope and Storage Isolation, then reboot.
 
-          Tested target application UID: 10399.
+          Target application: moe.shizuku.redirectstorage (UID resolved dynamically).
           This asset is the existing APK from a successful build, without rebuilding or resigning.
           Project code: MIT License (retain the copyright and license notice).
           NOTES
