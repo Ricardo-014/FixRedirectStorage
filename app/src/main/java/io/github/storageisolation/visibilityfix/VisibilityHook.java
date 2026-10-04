@@ -14,17 +14,25 @@ import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam;
 public final class VisibilityHook extends XposedModule {
     private static final String TAG = "SIVisibilityFix";
     private static final String TARGET_PACKAGE = "moe.shizuku.redirectstorage";
-    private static final int TARGET_UID = 10399;
+    private volatile TargetIdentity targetIdentity;
+    private Method packageStateLookup;
+    private Method packageAppId;
+    private boolean uidLookupErrorLogged;
 
     @Override public void onSystemServerStarting(SystemServerStartingParam param) {
-        hookApplicationVisibility(param.getClassLoader());
         try {
             Class<?> type = Class.forName("com.android.server.pm.ComputerEngine",
                     false, param.getClassLoader());
+            packageStateLookup = type.getMethod("getPackageStateInternal",
+                    String.class, int.class);
+            packageAppId = Class.forName("com.android.server.pm.pkg.PackageStateInternal",
+                    false, param.getClassLoader()).getMethod("getAppId");
+            hookApplicationVisibility(param.getClassLoader());
             Method method = type.getDeclaredMethod("getInstalledPackagesBody",
                     long.class, int.class, int.class);
             hook(method).intercept(chain -> {
-                if (((Number) chain.getArg(2)).intValue() != TARGET_UID) {
+                if (!isTargetUid(chain.getThisObject(),
+                        ((Number) chain.getArg(2)).intValue())) {
                     return chain.proceed();
                 }
                 Object[] args = chain.getArgs().toArray();
@@ -34,6 +42,39 @@ public final class VisibilityHook extends XposedModule {
             log(Log.INFO, TAG, "Package enumeration hook installed");
         } catch (Throwable error) {
             log(Log.ERROR, TAG, "Cannot hook package enumeration", error);
+        }
+    }
+
+    private boolean isTargetUid(Object snapshot, int uid) {
+        if (snapshot == null || uid < 10000) return false;
+        try {
+            TargetIdentity identity = targetIdentity;
+            if (identity == null || identity.snapshot != snapshot) {
+                // This lookup returns unfiltered package state, so it does not
+                // recurse through AppsFilter. Package changes invalidate the snapshot.
+                Object state = packageStateLookup.invoke(snapshot, TARGET_PACKAGE, 1000);
+                int appId = state == null ? -1
+                        : ((Number) packageAppId.invoke(state)).intValue();
+                identity = new TargetIdentity(snapshot, appId);
+                targetIdentity = identity;
+            }
+            return identity.appId >= 10000 && uid % 100000 == identity.appId;
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            if (!uidLookupErrorLogged) {
+                uidLookupErrorLogged = true;
+                log(Log.ERROR, TAG, "Cannot resolve Storage Isolation UID", error);
+            }
+            return false;
+        }
+    }
+
+    private static final class TargetIdentity {
+        final Object snapshot;
+        final int appId;
+
+        TargetIdentity(Object snapshot, int appId) {
+            this.snapshot = snapshot;
+            this.appId = appId;
         }
     }
 
@@ -52,11 +93,12 @@ public final class VisibilityHook extends XposedModule {
                     Class<?>[] args = method.getParameterTypes();
                     final int uidIndex = args.length >= 5 && args[1] == int.class ? 1
                             : args.length >= 4 && args[0] == int.class ? 0 : -1;
-                    if (uidIndex < 0) continue;
+                    if (uidIndex != 1) continue; // Snapshot followed by the calling UID.
                     // Enumeration is not enough: the UI also looks up application
                     // resources and ApplicationInfo by package name.
                     hook(method).intercept(chain ->
-                            Integer.valueOf(TARGET_UID).equals(chain.getArg(uidIndex))
+                            isTargetUid(chain.getArg(0),
+                                    ((Number) chain.getArg(uidIndex)).intValue())
                                     ? false : chain.proceed());
                     count++;
                 }
