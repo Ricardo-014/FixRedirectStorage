@@ -46,19 +46,15 @@ jobs:
           asset="FixRedirectStorage-${RELEASE_TAG#v}-API102.apk"
           mv dist/app-debug.apk "dist/$asset"
           cat > release-notes.md <<'NOTES'
-          Modern LSPosed API 102 module for Storage Isolation on Android 17.
-
-          Version 0.17 resolves the Storage Isolation application UID dynamically from the current system package snapshot. Reinstalling the application no longer requires editing a hardcoded UID. Existing API 102 hooks and original service rule retrieval remain in place.
-
-          Keep the original Storage Isolation APK. Enable the module for the Android system / system scope and Storage Isolation, then reboot.
-
-          Target application: moe.shizuku.redirectstorage (UID resolved dynamically).
-          This asset is the existing APK from a successful build, without rebuilding or resigning.
-          Project code: MIT License (retain the copyright and license notice).
+          将存储隔离的 UID 改为按包名动态获取，卸载重装后无需再手动修改固定 UID。
           NOTES
           if ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             gh release create "$RELEASE_TAG" --target "$RELEASE_TARGET" \
               --title "FixRedirectStorage $RELEASE_TAG (API 102)" \
               --notes-file release-notes.md
+          else
+            gh release edit "$RELEASE_TAG" --notes-file release-notes.md
           fi
-          gh release upload "$RELEASE_TAG" "dist/$asset" --clobber
+          if ! gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -Fxq "$asset"; then
+            gh release upload "$RELEASE_TAG" "dist/$asset"
+          fi
