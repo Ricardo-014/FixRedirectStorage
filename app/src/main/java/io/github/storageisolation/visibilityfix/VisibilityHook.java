@@ -3,6 +3,7 @@ package io.github.storageisolation.visibilityfix;
 import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.util.Log;
+import android.os.SystemClock;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -17,16 +18,18 @@ public final class VisibilityHook extends XposedModule {
     private volatile TargetIdentity targetIdentity;
     private Method packageStateLookup;
     private Method packageAppId;
+    private final Object identityLock = new Object();
+    private long nextResolveAttemptAt;
+    private Method localServiceLookup;
+    private Class<?> packageManagerInternal;
+    private Method internalPackageStateLookup;
     private boolean uidLookupErrorLogged;
 
     @Override public void onSystemServerStarting(SystemServerStartingParam param) {
         try {
             Class<?> type = Class.forName("com.android.server.pm.ComputerEngine",
                     false, param.getClassLoader());
-            packageStateLookup = type.getMethod("getPackageStateInternal",
-                    String.class, int.class);
-            packageAppId = Class.forName("com.android.server.pm.pkg.PackageStateInternal",
-                    false, param.getClassLoader()).getMethod("getAppId");
+            initializeIdentityLookup(type, param.getClassLoader());
             hookApplicationVisibility(param.getClassLoader());
             Method method = type.getDeclaredMethod("getInstalledPackagesBody",
                     long.class, int.class, int.class);
@@ -45,27 +48,79 @@ public final class VisibilityHook extends XposedModule {
         }
     }
 
+    private void initializeIdentityLookup(Class<?> computer, ClassLoader loader)
+            throws ReflectiveOperationException {
+        // Invoke through public declaring types, not private implementation classes.
+        packageAppId = Class.forName("com.android.server.pm.pkg.PackageStateInternal",
+                false, loader).getMethod("getAppId");
+        try {
+            packageStateLookup = computer.getMethod("getPackageStateInternal",
+                    String.class, int.class);
+        } catch (NoSuchMethodException error) {
+            log(Log.WARN, TAG, "Snapshot lookup unavailable; using internal service", error);
+        }
+        try {
+            packageManagerInternal = Class.forName(
+                    "android.content.pm.PackageManagerInternal", false, loader);
+            internalPackageStateLookup = packageManagerInternal.getMethod(
+                    "getPackageStateInternal", String.class);
+            localServiceLookup = Class.forName("com.android.server.LocalServices",
+                    false, loader).getMethod("getService", Class.class);
+        } catch (ReflectiveOperationException error) {
+            log(Log.WARN, TAG, "Internal service fallback unavailable", error);
+        }
+    }
+
+    private int resolveAppId(Object snapshot) throws ReflectiveOperationException {
+        if (packageStateLookup != null) {
+            try {
+                // Unfiltered lookup avoids re-entering AppsFilter. A null state is
+                // authoritative for this snapshot: do not mix it with live state.
+                Object state = packageStateLookup.invoke(snapshot, TARGET_PACKAGE, 1000);
+                return state == null ? -1 : ((Number) packageAppId.invoke(state)).intValue();
+            } catch (ReflectiveOperationException | RuntimeException error) {
+                if (localServiceLookup == null) throw error;
+            }
+        }
+        if (localServiceLookup == null || internalPackageStateLookup == null) return -1;
+        Object service = localServiceLookup.invoke(null, packageManagerInternal);
+        if (service == null) return -1;
+        Object state = internalPackageStateLookup.invoke(service, TARGET_PACKAGE);
+        return state == null ? -1 : ((Number) packageAppId.invoke(state)).intValue();
+    }
+
     private boolean isTargetUid(Object snapshot, int uid) {
         if (snapshot == null || uid < 10000) return false;
-        try {
-            TargetIdentity identity = targetIdentity;
-            if (identity == null || identity.snapshot != snapshot) {
-                // This lookup returns unfiltered package state, so it does not
-                // recurse through AppsFilter. Package changes invalidate the snapshot.
-                Object state = packageStateLookup.invoke(snapshot, TARGET_PACKAGE, 1000);
-                int appId = state == null ? -1
-                        : ((Number) packageAppId.invoke(state)).intValue();
-                identity = new TargetIdentity(snapshot, appId);
-                targetIdentity = identity;
+        TargetIdentity identity = targetIdentity;
+        if (identity == null || identity.snapshot != snapshot) {
+            synchronized (identityLock) {
+                identity = targetIdentity;
+                if (identity == null || identity.snapshot != snapshot) {
+                    // Never apply an AppID cached from an obsolete package snapshot.
+                    targetIdentity = null;
+                    long now = SystemClock.elapsedRealtime();
+                    if (now < nextResolveAttemptAt) return false;
+                    try {
+                        int appId = resolveAppId(snapshot);
+                        if (appId < 10000) {
+                            nextResolveAttemptAt = now + 30000;
+                            return false;
+                        }
+                        identity = new TargetIdentity(snapshot, appId);
+                        targetIdentity = identity;
+                        nextResolveAttemptAt = 0;
+                    } catch (ReflectiveOperationException | RuntimeException error) {
+                        nextResolveAttemptAt = now + 30000;
+                        if (!uidLookupErrorLogged) {
+                            uidLookupErrorLogged = true;
+                            log(Log.ERROR, TAG, "Cannot resolve Storage Isolation UID", error);
+                        }
+                        return false;
+                    }
+                }
             }
-            return identity.appId >= 10000 && uid % 100000 == identity.appId;
-        } catch (ReflectiveOperationException | RuntimeException error) {
-            if (!uidLookupErrorLogged) {
-                uidLookupErrorLogged = true;
-                log(Log.ERROR, TAG, "Cannot resolve Storage Isolation UID", error);
-            }
-            return false;
         }
+        return uid % 100000 == identity.appId;
     }
 
     private static final class TargetIdentity {
