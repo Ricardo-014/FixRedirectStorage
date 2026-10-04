@@ -17,7 +17,7 @@ on:
       target:
         description: Source commit or branch for the release tag
         required: true
-        default: '9060b2345d71680a794b49bdbf3b7b4660d5c6c9'
+        default: main
 
 permissions:
   contents: write
@@ -30,7 +30,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ inputs.tag || 'v0.17' }}
-      RELEASE_TARGET: ${{ inputs.target || '9060b2345d71680a794b49bdbf3b7b4660d5c6c9' }}
+      RELEASE_TARGET: ${{ inputs.target || github.sha }}
     steps:
       - uses: actions/download-artifact@v4
         with:
