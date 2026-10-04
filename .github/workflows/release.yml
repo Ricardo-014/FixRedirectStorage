@@ -46,7 +46,7 @@ jobs:
           asset="FixRedirectStorage-${RELEASE_TAG#v}-API102.apk"
           mv dist/app-debug.apk "dist/$asset"
           cat > release-notes.md <<'NOTES'
-          增加 UID 查询回退和失败后重试，保留原有三个 Hook。修正重装后的 AppID 缓存失效处理及内部服务反射访问问题。
+          Adds fallback UID lookup and retries failed lookups while preserving the existing three hooks. Fixes stale AppID caching after reinstall and reflection access to the internal package manager service.
           NOTES
           if ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             gh release create "$RELEASE_TAG" --target "$RELEASE_TARGET" \
