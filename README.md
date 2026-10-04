@@ -16,13 +16,13 @@ Existing rule records come from the original service. The module does not fabric
 
 Keep the original Storage Isolation APK. Install the module APK, enable it in LSPosed, and select the Android system / `system` scope plus `moe.shizuku.redirectstorage`. Reboot after updating. This uses modern libxposed API 102.
 
-The tested Storage Isolation UID is **10399**. If reinstalling it changes the UID, update `TARGET_UID` in `VisibilityHook.java` and rebuild. App-side class and method names are tied to the analyzed APK version.
+Version 0.17 resolves the Storage Isolation app ID dynamically from the system package snapshot using its package name. Package changes invalidate that snapshot, so reinstalling the app does not require changing a hardcoded UID. The same app ID is recognized across Android users. Failed lookups leave the original system behavior unchanged. App-side class and method names remain tied to the analyzed APK version.
 
 GitHub Actions builds the APK on pushes to main, or through **Actions → Build LSPosed module → Run workflow**. Download the `storage-isolation-visibility-fix-debug` artifact.
 
 The module app retains **Save logs to Download**. It needs root only when exporting logs. Runtime logs contain hook setup and failures.
 
-GitHub Actions validates compilation and packaging. Version 0.16 still needs a device check after installation to confirm the application count regression is resolved.
+GitHub Actions validates compilation and packaging. Version 0.17 needs a device check after installation to validate dynamic UID resolution on the device's framework.
 
 ## Downloads and license
 
