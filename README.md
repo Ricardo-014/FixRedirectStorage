@@ -18,11 +18,13 @@ Keep the original Storage Isolation APK. Install the module APK, enable it in LS
 
 Version 0.17 resolves the Storage Isolation app ID dynamically from the system package snapshot using its package name. Package changes invalidate that snapshot, so reinstalling the app does not require changing a hardcoded UID. The same app ID is recognized across Android users. Failed lookups leave the original system behavior unchanged. App-side class and method names remain tied to the analyzed APK version.
 
+Version 0.18 adds a PackageManagerInternal fallback when snapshot lookup is unavailable or throws, and retries failed identity resolution after 30 seconds using a monotonic clock. Successful identities remain bound to their package snapshot, preventing stale AppIDs after reinstall. Reflection uses public declaring types so private service implementations do not cause access failures. The three hook operations and native service-record recovery remain unchanged.
+
 GitHub Actions builds the APK on pushes to main, or through **Actions → Build LSPosed module → Run workflow**. Download the `storage-isolation-visibility-fix-debug` artifact.
 
 The module app retains **Save logs to Download**. It needs root only when exporting logs. Runtime logs contain hook setup and failures.
 
-GitHub Actions validates compilation and packaging. Version 0.17 needs a device check after installation to validate dynamic UID resolution on the device's framework.
+GitHub Actions validates compilation and packaging. Version 0.18 needs a device check after installation to validate dynamic UID resolution on the device's framework.
 
 ## Downloads and license
 
